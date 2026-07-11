@@ -123,7 +123,11 @@ class LocalDataSource(DataSource):
         return metadata
 
     def load_series_list(self, series_list: List[str]) -> NoReturn:
-        logger.info("Start loading %s series in parallel", len(series_list))
+        series_count = len(series_list)
+        if series_count == 1:
+            logger.info("Start loading 1 series")
+        else:
+            logger.info("Start loading %s series in parallel", series_count)
         data_dict = {}
         with ThreadPoolExecutor() as executor:
             futures = [

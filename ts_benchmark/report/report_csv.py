@@ -5,7 +5,7 @@ from typing import Union, List
 
 import pandas as pd
 
-from ts_benchmark.common.constant import ROOT_PATH
+from ts_benchmark.common.constant import RESULT_PATH
 from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.recording import load_record_data
 from ts_benchmark.report.utils.leaderboard import get_leaderboard
@@ -63,14 +63,15 @@ def report(report_config: dict) -> None:
     # Create final DataFrame and save to CSV
     if report_config.get("save_path", None) is not None:
         save_path = report_config.get("save_path", None)
+        report_dir = os.path.join(RESULT_PATH, save_path)
+        os.makedirs(report_dir, exist_ok=True)
         leaderboard_df.to_csv(
-            os.path.join(
-                ROOT_PATH, "result", save_path, report_config["leaderboard_file_name"]
-            ),
+            os.path.join(report_dir, report_config["leaderboard_file_name"]),
             index=False,
         )
     else:
+        os.makedirs(RESULT_PATH, exist_ok=True)
         leaderboard_df.to_csv(
-            os.path.join(ROOT_PATH, "result", report_config["leaderboard_file_name"]),
+            os.path.join(RESULT_PATH, report_config["leaderboard_file_name"]),
             index=False,
         )

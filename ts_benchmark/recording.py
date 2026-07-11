@@ -13,7 +13,7 @@ from typing import List, Optional
 import pandas as pd
 from pandas.errors import ParserError
 
-from ts_benchmark.common.constant import ROOT_PATH
+from ts_benchmark.common.constant import RESULT_PATH
 from ts_benchmark.utils.compress import (
     get_compress_method_from_ext,
     decompress,
@@ -153,12 +153,12 @@ def save_log(
 
     if save_path is not None:
         result_path = (
-            os.path.join(ROOT_PATH, "result", save_path)
+            os.path.join(RESULT_PATH, save_path)
             if not os.path.isabs(save_path)
             else save_path
         )
     else:
-        result_path = os.path.join(ROOT_PATH, "result")
+        result_path = RESULT_PATH
     os.makedirs(result_path, exist_ok=True)
 
     record_filename = file_prefix + get_unique_file_suffix()

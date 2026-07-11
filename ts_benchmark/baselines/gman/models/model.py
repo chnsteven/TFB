@@ -328,7 +328,8 @@ class GMAN(nn.Module):
         d = args.d
         D = K * d
         self.num_his = args.num_his
-        self.SE = SE
+        # register spatial embedding as a buffer so it moves with the module/device
+        self.register_buffer("SE", SE)
         self.STEmbedding = STEmbedding(D, bn_decay)
         self.STAttBlock_1 = nn.ModuleList([STAttBlock(K, d, bn_decay) for _ in range(L)])
         self.STAttBlock_2 = nn.ModuleList([STAttBlock(K, d, bn_decay) for _ in range(L)])

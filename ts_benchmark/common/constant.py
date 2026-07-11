@@ -4,6 +4,10 @@ import os
 # Get the root path where the code file is located
 ROOT_PATH = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
 
+# Benchmark artifacts (logs, test_report CSVs) live under autodl-tmp/TFB by default.
+AUTODL_TMP_ROOT = os.environ.get("AUTODL_TMP_ROOT", "/root/autodl-tmp")
+RESULT_PATH = os.environ.get("TFB_RESULT_PATH", os.path.join(AUTODL_TMP_ROOT, "TFB"))
+
 # Build the path to the dataset folder
 FORECASTING_DATASET_PATH = os.path.join(ROOT_PATH, "dataset", "forecasting")
 

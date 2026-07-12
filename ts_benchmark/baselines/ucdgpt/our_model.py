@@ -12,7 +12,6 @@ from .Embed import (
     get_1d_sincos_pos_embed_from_grid,
 )
 from .mask_strategy import (
-    forecast_full_masking,
     psych_gradient_masking,
     random_spatiotemporal_masking,
     spatiotemporal_restore,
@@ -535,9 +534,6 @@ class UcdGPT(nn.Module):
             return random_spatiotemporal_masking(
                 x, T, self.args.s_mask_ratio, self.args.t_mask_ratio, **eval_kw
             )
-        if mask_strategy == "forecast_full":
-            his_t_patches = self.args.ucdgpt_his_len // self.args.t_patch_size
-            return forecast_full_masking(x, T, his_t_patches, **eval_kw)
         if mask_strategy in ("psych_gradient", "spatio_gradient", "psych_gradient_union"):
             component_map = {
                 "psych_gradient": "psych",
@@ -794,9 +790,6 @@ class UcdGPT(nn.Module):
         elif mask_strategy == "gradient_dual":
             mask_strategy_base = "psych_gradient"
             mask_strategy_meta = "spatio_gradient"
-        elif mask_strategy == "forecast_full":
-            mask_strategy_base = "forecast_full"
-            mask_strategy_meta = "forecast_full"
         elif mask_strategy in (
             "random_spatiotemporal",
             "psych_gradient",
@@ -807,7 +800,7 @@ class UcdGPT(nn.Module):
         else:
             raise ValueError(
                 f"Unsupported mask_strategy: {mask_strategy}. "
-                "Use 'combined', 'gradient_dual', 'forecast_full', 'random_spatiotemporal', "
+                "Use 'combined', 'gradient_dual', 'random_spatiotemporal', "
                 "'psych_gradient', or 'spatio_gradient'."
             )
 
@@ -873,7 +866,7 @@ class UcdGPT(nn.Module):
 
         if mask_strategy in ("combined", "gradient_dual"):
             loss_mode = "total"
-        elif mask_strategy in ("random_spatiotemporal", "forecast_full"):
+        elif mask_strategy == "random_spatiotemporal":
             loss_mode = "base"
         else:
             loss_mode = "meta"
@@ -893,23 +886,7 @@ class UcdGPT(nn.Module):
                 "meta": mask_info_meta,
                 "base": mask_info_base,
             }
-        elif mask_strategy == "forecast_full":
-            loss2["mask_info"] = {"base": mask_info_base}
         else:
             loss2["mask_info"] = {mask_strategy: mask_info_meta}
 
-        mask_event_only = self._restrict_mask_to_forecast(mask_event_only, input_size)
-
         return loss1, loss2, pred, pred_event_only, target, mask_event_only
-
-    def _restrict_mask_to_forecast(self, mask, input_size):
-        """Zero out mask positions that fall in the history segment (forecast eval only)."""
-        if getattr(self.args, "eval_scope", "full") != "forecast":
-            return mask
-        t_patches, h_p, w_p = input_size
-        his_t_patches = self.args.ucdgpt_his_len // self.args.t_patch_size
-        spatial_patches = h_p * w_p
-        n, l = mask.shape
-        idx = torch.arange(l, device=mask.device)
-        forecast = (idx // spatial_patches) >= his_t_patches
-        return mask * forecast.view(1, -1).to(mask.dtype)

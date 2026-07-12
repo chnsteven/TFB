@@ -15,68 +15,6 @@ def _get_psych_factor(device, cycle_gamma=0.2, psych_top_k=2):
     return _psych_factor_cache[cache_key]
 
 
-def forecast_full_masking(x, T, his_t_patches, option="", seed=None):
-    """
-    Forecasting eval mask: history tokens fully visible, entire future fully masked.
-
-    Aligns generative eval with direct forecasting — score all future positions
-    (with eval_scope=forecast) while keeping the full history in the encoder.
-
-    Args:
-        x: [N, L, D] token tensor after patch embedding.
-        T: number of temporal patch tokens (L must be divisible by T).
-        his_t_patches: count of history time patches (pred tail starts here).
-
-    Returns:
-        x_masked, mask, ids_restore, ids_keep, mask_info
-    """
-    del option, seed  # deterministic; no randomness
-
-    N, L, D = x.shape
-    device = x.device
-    S = L // T
-
-    if T <= 0 or L % T != 0:
-        raise ValueError(f"Incompatible T={T} for token length L={L}")
-    if his_t_patches < 0 or his_t_patches > T:
-        raise ValueError(
-            f"his_t_patches={his_t_patches} out of range for T={T} temporal patches"
-        )
-
-    t_idx = torch.arange(T, device=device)
-    temporal_mask = t_idx >= his_t_patches
-    mask = (
-        temporal_mask.unsqueeze(1)
-        .expand(T, S)
-        .reshape(L)
-        .unsqueeze(0)
-        .expand(N, L)
-        .float()
-    )
-
-    mask_info = {
-        "strategy": "forecast_full",
-        "t_mask_rate": temporal_mask.float().mean().item(),
-        "s_mask_rate": 0.0,
-        "union_rate": mask.float().mean().item(),
-    }
-
-    ids_shuffle = torch.argsort(mask, dim=1, stable=True)
-    ids_restore = torch.argsort(ids_shuffle, dim=1)
-    len_keep = int((mask[0] == 0).sum().item())
-    if len_keep <= 0:
-        raise ValueError(
-            "forecast_full: no history tokens to keep "
-            f"(his_t_patches={his_t_patches}, S={S})"
-        )
-
-    ids_keep = ids_shuffle[:, :len_keep]
-    x_masked = torch.gather(
-        x, dim=1, index=ids_keep.unsqueeze(-1).expand(-1, -1, D)
-    )
-    return x_masked, mask, ids_restore, ids_keep, mask_info
-
-
 def random_spatiotemporal_masking(x, T, spatial_ratio=0.15, temporal_ratio=0.15, option="", seed=None):
     """
     Randomly mask tokens with joint spatial and temporal constraints.

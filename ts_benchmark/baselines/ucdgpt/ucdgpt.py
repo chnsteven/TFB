@@ -15,21 +15,20 @@ MODEL_HYPER_PARAMS = {
     "hour_patch_size": 6,
     "t_mask_ratio": 0.15,
     "s_mask_ratio": 0.15,
-    "patch_size": 8,
+    "patch_size": 4,
     "t_patch_size": 16,
     "model_size": "medium",
     "no_qkv_bias": 0,
     "pos_emb": "SinCos",
     "mask_strategy": "combined",
     "contrastive_weight": 0.5,
-    "meta_weight": 1.0,
+    "meta_weight": 0.5,
     "curriculum_mask": 1,
     "curriculum_mask_ratio": 0.01,
     "curriculum_mask_rate": 3,
     "fixed_mask_per_epoch": 0,
     "cycle_gamma": 1.0,
     "psych_top_k": 2,
-    "eval_scope": "forecast",
     "in_chans": 4,
     "in_chans_event_only": 1,
     "batch_size": 128,
@@ -61,15 +60,14 @@ class UCDGPT(DeepForecastingModelBase):
 
     def _process(self, input, target, input_mark, target_mark):
         future = target[:, -self.config.horizon :, :]
-        full_series = torch.cat([input, future], dim=1)
+        pred_future = torch.zeros_like(future)
+        pred_series = torch.cat([input, pred_future], dim=1)
         full_mark = self._build_ucdgpt_time_mark(input_mark, target_mark)
-        model_input = self._to_ucdgpt_grid(full_series)
+        pred_model_input = self._to_ucdgpt_grid(pred_series)
 
-        # The benchmark prediction path always masks the complete future. This keeps
-        # validation and test forecasts independent of future target values.
         _, _, pred_patches, _, _, _ = self.model(
-            (model_input, full_mark, None),
-            mask_strategy="forecast_full",
+            (pred_model_input, full_mark, None),
+            mask_strategy=self.config.mask_strategy,
             mode="forward",
         )
         output = self._patches_to_tfb_output(pred_patches)
@@ -77,8 +75,10 @@ class UCDGPT(DeepForecastingModelBase):
         if self.model.training:
             # Preserve UCDGPT's run.sh training objective, while TFB retains
             # ownership of validation, rolling prediction, and reported metrics.
+            train_series = torch.cat([input, future], dim=1)
+            train_model_input = self._to_ucdgpt_grid(train_series)
             loss, _, _, _, _, _ = self.model(
-                (model_input, full_mark, None),
+                (train_model_input, full_mark, None),
                 mask_strategy=self.config.mask_strategy,
                 mode="backward",
             )

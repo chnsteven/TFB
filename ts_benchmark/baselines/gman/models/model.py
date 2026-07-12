@@ -192,11 +192,12 @@ class temporalAttention(nn.Module):
             batch_size = X.shape[0]
             num_step = X.shape[1]
             num_vertex = X.shape[2]
-            mask = torch.ones(num_step, num_step)
+            mask = torch.ones(
+                num_step, num_step, device=attention.device, dtype=torch.bool
+            )
             mask = torch.tril(mask)
             mask = torch.unsqueeze(torch.unsqueeze(mask, dim=0), dim=0)
             mask = mask.repeat(self.K * batch_size, num_vertex, 1, 1)
-            mask = mask.to(torch.bool)
             attention = torch.where(mask, attention, -2 ** 15 + 1)
         # softmax
         attention = F.softmax(attention, dim=-1)

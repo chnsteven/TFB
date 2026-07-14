@@ -1,0 +1,3 @@
+strategy_args,metric_name,Prophet;{}
+"{""deterministic"": ""efficient"", ""horizon"": 1152, ""save_true_pred"": false, ""seed"": 2026, ""strategy_name"": ""fixed_forecast"", ""target_channel"": null, ""train_ratio_in_tv"": 0.8}",mae,0.3815589415444507
+"{""deterministic"": ""efficient"", ""horizon"": 1152, ""save_true_pred"": false, ""seed"": 2026, ""strategy_name"": ""fixed_forecast"", ""target_channel"": null, ""train_ratio_in_tv"": 0.8}",rmse,0.6522397456029652

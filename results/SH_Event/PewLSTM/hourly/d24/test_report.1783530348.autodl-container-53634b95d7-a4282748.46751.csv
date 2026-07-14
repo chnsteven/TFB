@@ -1,0 +1,3 @@
+strategy_args,metric_name,"PewLSTM;{""batch_size"": 4, ""dropout"": 0.1, ""hidden_size"": 64, ""horizon"": 576, ""lr"": 0.001, ""norm"": true, ""num_epochs"": 25, ""num_layers"": 2, ""patience"": 5, ""pred_len"": 576, ""seq_len"": 576, ""weather_size"": 72}"
+"{""deterministic"": ""efficient"", ""horizon"": 576, ""save_true_pred"": false, ""seed"": 2026, ""strategy_name"": ""fixed_forecast"", ""target_channel"": null, ""train_ratio_in_tv"": 0.8}",mae,0.319688453856115
+"{""deterministic"": ""efficient"", ""horizon"": 576, ""save_true_pred"": false, ""seed"": 2026, ""strategy_name"": ""fixed_forecast"", ""target_channel"": null, ""train_ratio_in_tv"": 0.8}",rmse,0.5304338109832898

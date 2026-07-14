@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 import tarfile
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -24,8 +23,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--root",
-        default="TFB results/SH_Event",
-        help="SH_Event results directory. Default: %(default)s",
+        default="results/",
+        help="results directory. Default: %(default)s",
     )
     parser.add_argument(
         "--latex",
@@ -52,12 +51,7 @@ def read_archive_rows(archive_path: Path) -> list[dict[str, str]]:
 def horizon_dirs(model_dir: Path) -> dict[str, Path]:
     dirs: dict[str, Path] = {}
     for horizon in HORIZONS:
-        direct = model_dir / horizon
-        hourly = model_dir / "hourly" / horizon
-        if direct.exists():
-            dirs[horizon] = direct
-        elif hourly.exists():
-            dirs[horizon] = hourly
+        dirs[horizon] = model_dir / "hourly" / horizon
     return dirs
 
 

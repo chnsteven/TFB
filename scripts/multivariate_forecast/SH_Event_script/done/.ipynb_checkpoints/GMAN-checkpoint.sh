@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+source "$(dirname "$0")/../_config.sh"
+
+CFG="fixed_forecast_config_sh_event_hourly.json"
+
+python ./scripts/run_benchmark.py --config-path "fixed_forecast_config_sh_event_hourly.json" --data-name-list event_{0..7}.csv --strategy-args '{"horizon": 12}' --model-name "gman.GMAN" --model-hyper-params '{"seq_len": 24, "pred_len": 12, "horizon": 12, "num_his": 24, "num_pred": 12, "time_steps_per_day": 1, "norm": true, "batch_size": 16, "lr": 0.0001, "num_epochs": 10, "L": 1, "K": 1, "d": 8, "patience": 10}' --gpus 0 --num-workers 1 --timeout 60000 --save-path "SH_Event/GMAN/hourly/d12"
+
+# python ./scripts/run_benchmark.py --config-path "fixed_forecast_config_sh_event_hourly.json" --data-name-list event_{0..7}.csv --strategy-args '{"horizon": 24}' --model-name "gman.GMAN" --model-hyper-params '{"seq_len": 24, "pred_len": 24, "horizon": 24, "num_his": 24, "num_pred": 24, "time_steps_per_day": 1, "norm": true, "batch_size": 16, "lr": 0.0001, "num_epochs": 10, "L": 1, "K": 1, "d": 8, "patience": 10}' --gpus 0 --num-workers 1 --timeout 60000 --save-path "SH_Event/GMAN/hourly/d24"
+
+# python ./scripts/run_benchmark.py --config-path "fixed_forecast_config_sh_event_hourly.json" --data-name-list event_{0..7}.csv --strategy-args '{"horizon": 36}' --model-name "gman.GMAN" --model-hyper-params '{"seq_len": 24, "pred_len": 36, "horizon": 36, "num_his": 24, "num_pred": 36, "time_steps_per_day": 1, "norm": true, "batch_size": 16, "lr": 0.0001, "num_epochs": 10, "L": 1, "K": 1, "d": 8, "patience": 10}' --gpus 0 --num-workers 1 --timeout 60000 --save-path "SH_Event/GMAN/hourly/d36"
+
+# python ./scripts/run_benchmark.py --config-path "fixed_forecast_config_sh_event_hourly.json" --data-name-list event_{0..7}.csv --strategy-args '{"horizon": 48}' --model-name "gman.GMAN" --model-hyper-params '{"seq_len": 24, "pred_len": 48, "horizon": 48, "num_his": 24, "num_pred": 48, "time_steps_per_day": 1, "norm": true, "batch_size": 16, "lr": 0.0001, "num_epochs": 10, "L": 1, "K": 1, "d": 8, "patience": 10}' --gpus 0 --num-workers 1 --timeout 60000 --save-path "SH_Event/GMAN/hourly/d48"
+

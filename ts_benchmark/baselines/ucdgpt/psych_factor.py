@@ -18,12 +18,12 @@ class PsychFactor(nn.Module):
 
     def __init__(
         self,
-        lambda_=1.5,
         gamma=0.2,
         top_k: int = 2,
         method="fft",
         option="",
         eps: float = 1e-8,
+        lambda_=None,
     ):
         super().__init__()
         if option == "eval":
@@ -35,7 +35,7 @@ class PsychFactor(nn.Module):
 
         # M has 3 ch; linear 3 -> 1
         self.phi_base_linear = nn.Linear(in_features=3, out_features=1, bias=True)
-        self.lambda_ = nn.Parameter(torch.tensor(lambda_, dtype=torch.float32))
+        self.lambda_ = None if lambda_ is None else float(lambda_)
         # LayerNorm: normalized_shape created dynamically in forward from (T,H,W)
 
         self.gamma = gamma
@@ -48,32 +48,23 @@ class PsychFactor(nn.Module):
     # Input dim validation
     # ------------------------------------------------------------------
     @staticmethod
-    def _validate_inputs(E: torch.Tensor, M: torch.Tensor):
-        """Validate E and M tensor dims."""
-        if E.dim() != 5:
-            raise ValueError(f"E must be 5-D (B, 1, T, H, W), got {E.dim()}-D")
+    def _validate_input(M: torch.Tensor):
+        """Validate the meteorological tensor dimensions."""
         if M.dim() != 5:
             raise ValueError(f"M must be 5-D (B, 3, T, H, W), got {M.dim()}-D")
-        if E.shape[1] != 1:
-            raise ValueError(f"E channel must be 1, got {E.shape[1]}")
         if M.shape[1] != 3:
             raise ValueError(f"M channel must be 3, got {M.shape[1]}")
-        if E.shape[0] != M.shape[0]:
-            raise ValueError(f"Batch size mismatch: E={E.shape[0]}, M={M.shape[0]}")
-        if E.shape[2:] != M.shape[2:]:
-            raise ValueError(f"T/H/W mismatch: E={E.shape[2:]}, M={M.shape[2:]}")
 
     # ------------------------------------------------------------------
     # Psych factor (Ψ)
     # ------------------------------------------------------------------
-    def forward(self, E: torch.Tensor, M: torch.Tensor):
-        self._validate_inputs(E, M)
-        return self.compute_psych_factor(E, M)
+    def forward(self, M: torch.Tensor):
+        self._validate_input(M)
+        return self.compute_psych_factor(M)
 
-    def compute_psych_factor(self, E: torch.Tensor, M: torch.Tensor):
+    def compute_psych_factor(self, M: torch.Tensor):
         """
-        Inputs:
-            E: (B, 1, T, H, W)
+        Input:
             M: (B, 3, T, H, W)
         Output:
             psi: (B, T, H, W)

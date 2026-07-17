@@ -16,6 +16,7 @@ from .mask_strategy import (
     random_spatiotemporal_masking,
     spatiotemporal_restore,
 )
+from .psych_factor import PsychFactor
 from .utils import compute_loss_base, compute_loss_contra, compute_loss_meta
 
 MODEL_SIZE_CHOICES = ("medium", "large")
@@ -245,6 +246,11 @@ class UcdGPT(nn.Module):
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.in_chans_event_only = in_chans_event_only
+
+        self.psych_factor = PsychFactor(
+            gamma=getattr(args, "cycle_gamma", 0.2),
+            top_k=getattr(args, "psych_top_k", 2),
+        )
 
         self.embed_dim = embed_dim
         self.decoder_embed_dim = decoder_embed_dim
@@ -545,6 +551,7 @@ class UcdGPT(nn.Module):
                 x_raw,
                 self.patch_size,
                 self.args.t_patch_size,
+                psych_factor=self.psych_factor,
                 cycle_gamma=getattr(self.args, "cycle_gamma", 0.2),
                 psych_top_k=getattr(self.args, "psych_top_k", 2),
                 component=component_map[mask_strategy],

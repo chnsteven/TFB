@@ -2,17 +2,18 @@
 set -euo pipefail
 source "$(dirname "$0")/../_config.sh"
 
+TFB_GPU_DEVICES="${TFB_GPU_DEVICES:-0}"
+read -r -a STMTM_GPU_ARGS <<< "$TFB_GPU_DEVICES"
+TFB_SERIAL_RUN_FLAGS+=(--gpus "${STMTM_GPU_ARGS[@]}")
+
 CFG="fixed_forecast_config_sh_event_hourly.json"
+COMMON_HP='{"task_name": "finetune", "seq_len": 576, "label_len": 0, "norm": true, "batch_size": 1, "d_model": 32, "n_heads": 2, "e_layers": 1, "d_ff": 32, "d_hidden": 8, "factor": 1, "dropout": 0.1, "head_dropout": 0.1, "embed": "timeF", "freq": "h", "activation": "gelu", "output_attention": false, "kernel_size": 15, "seg_len": 15, "p_tmask": 0.2, "topk": 3, "tau": 0.1, "alpha": 0.5, "loss": "MSE", "lr": 0.0001, "lradj": "type1", "num_epochs": 25, "patience": 3}'
 
 run_benchmark_one_series_at_a_time "$CFG" '{"horizon": 288}' "st_mtm.STMTM" \
-  '{"seq_len": 576, "pred_len": 288, "horizon": 288, "norm": true, "batch_size": 1, "lr": 0.0001, "num_epochs": 10, "d_model": 256, "n_heads": 8, "e_layers": 2, "d_ff": 1024, "dropout": 0.1, "patience": 3}' \
-  "SH_Event/STMTM/hourly/d12"
+  "${COMMON_HP%\}} , \"pred_len\": 288, \"horizon\": 288}" "SH_Event/STMTM/hourly/d12"
 run_benchmark_one_series_at_a_time "$CFG" '{"horizon": 576}' "st_mtm.STMTM" \
-  '{"seq_len": 576, "pred_len": 576, "horizon": 576, "norm": true, "batch_size": 1, "lr": 0.0001, "num_epochs": 10, "d_model": 256, "n_heads": 8, "e_layers": 2, "d_ff": 1024, "dropout": 0.1, "patience": 3}' \
-  "SH_Event/STMTM/hourly/d24"
+  "${COMMON_HP%\}} , \"pred_len\": 576, \"horizon\": 576}" "SH_Event/STMTM/hourly/d24"
 run_benchmark_one_series_at_a_time "$CFG" '{"horizon": 864}' "st_mtm.STMTM" \
-  '{"seq_len": 576, "pred_len": 864, "horizon": 864, "norm": true, "batch_size": 1, "lr": 0.0001, "num_epochs": 10, "d_model": 256, "n_heads": 8, "e_layers": 2, "d_ff": 1024, "dropout": 0.1, "patience": 3}' \
-  "SH_Event/STMTM/hourly/d36"
+  "${COMMON_HP%\}} , \"pred_len\": 864, \"horizon\": 864}" "SH_Event/STMTM/hourly/d36"
 run_benchmark_one_series_at_a_time "$CFG" '{"horizon": 1152}' "st_mtm.STMTM" \
-  '{"seq_len": 576, "pred_len": 1152, "horizon": 1152, "norm": true, "batch_size": 1, "lr": 0.0001, "num_epochs": 10, "d_model": 256, "n_heads": 8, "e_layers": 2, "d_ff": 1024, "dropout": 0.1, "patience": 3}' \
-  "SH_Event/STMTM/hourly/d48"
+  "${COMMON_HP%\}} , \"pred_len\": 1152, \"horizon\": 1152}" "SH_Event/STMTM/hourly/d48"

@@ -90,28 +90,9 @@ def psych_gradient_masking(
     cycle_gamma=0.2,
     psych_top_k=2,
     component="union",
+    psych_factor=None,
 ):
-    """
-    Content-aware mask from psych factor and/or spatial gradient.
-
-    Args:
-        x_tokens: [B, L, embed_dim]
-        x_raw: [B, 4, T_raw, H_raw, W_raw]
-        patch_size: spatial patch size
-        t_patch_size: temporal patch size
-        option: "eval" fixes random seed
-        component: which mask to apply —
-            ``union`` (default): cycle-psych temporal | spatial gradient;
-            ``psych``: cycle-psych temporal only (ablation);
-            ``spatial``: spatial gradient only (ablation).
-        cycle_gamma: shared upper cap for both branch mask probabilities;
-            psych uses ``clamp(psi_patch * cycle_gamma, 0, cycle_gamma)``,
-            spatial uses ``clamp(grad_patch, 0, cycle_gamma)``.
-        psych_top_k: number of dominant CWT periods per spatial location (PsychFactor).
-
-    Returns:
-        x_masked, mask, ids_restore, ids_keep, mask_info
-    """
+    """Content-aware mask from psych factor and/or spatial gradient."""
     if component not in ("union", "psych", "spatial"):
         raise ValueError(
             "component must be 'union', 'psych', or 'spatial', got {!r}".format(
@@ -135,20 +116,20 @@ def psych_gradient_masking(
                 f"T_patch({T_patch}) × H_patch({H_patch}) × W_patch({W_patch}) = {expected_L}"
             )
 
-        E = x_raw[:, 0:1]
         M = x_raw[:, 1:4]
 
-        psych = _get_psych_factor(
-            device, cycle_gamma=cycle_gamma, psych_top_k=psych_top_k
-        )
-        psi, top_k_cycles = psych.compute_psych_factor(E, M)
+        psych = psych_factor
+        if psych is None:
+            psych = _get_psych_factor(device, cycle_gamma=cycle_gamma, psych_top_k=psych_top_k)
+        psi, top_k_cycles = psych.compute_psych_factor(M)
 
         tau_cycle = utils.build_tau_cycle(psi, top_k_cycles)
         psi_patch = utils.downsample_to_patch_resolution(psi, T_patch, H_patch, W_patch)
         tau_patch = utils.map_tau_cycle_to_patch(tau_cycle, t_patch_size, patch_size)
         cap = float(cycle_gamma)
         p = _mask_prob_capped(psi_patch * cap, cap)
-        t_mask_full = tau_patch & torch.bernoulli(p).bool()
+        t_prob = torch.where(tau_patch, p, torch.zeros_like(p))
+        t_mask_full = torch.bernoulli(t_prob).bool()
 
         grad = utils.compute_central_spatio_gradient(M)
         grad_mean = grad.mean(dim=1)
@@ -158,15 +139,25 @@ def psych_gradient_masking(
 
         if component == "psych":
             union_mask = t_mask_full
+            union_prob = t_prob
             strategy_name = "psych_gradient"
         elif component == "spatial":
             union_mask = s_mask_full
+            union_prob = None
             strategy_name = "spatio_gradient"
         else:
             union_mask = t_mask_full | s_mask_full
+            union_prob = s_mask_full.float() + (~s_mask_full).float() * t_prob
             strategy_name = "psych_gradient"
 
         mask_flat = union_mask.reshape(B, L).float()
+
+        if union_prob is None:
+            x_for_gather = x_tokens
+        else:
+            mask_st = union_mask.float() + union_prob - union_prob.detach()
+            keep_st = 1.0 - mask_st.reshape(B, L)
+            x_for_gather = x_tokens * keep_st.unsqueeze(-1)
 
         mask_info = {
             "strategy": strategy_name,
@@ -185,8 +176,7 @@ def psych_gradient_masking(
 
         ids_keep = ids_shuffle[:, :max_keep]
         x_masked = torch.gather(
-            x_tokens, dim=1,
-            index=ids_keep.unsqueeze(-1).expand(B, max_keep, D),
+            x_for_gather, dim=1, index=ids_keep.unsqueeze(-1).expand(B, max_keep, D)
         )
         return x_masked, mask_flat, ids_restore, ids_keep, mask_info
 

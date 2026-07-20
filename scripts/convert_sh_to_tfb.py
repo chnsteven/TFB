@@ -9,7 +9,7 @@ import pandas as pd
 ROOT = os.path.abspath(os.path.join(__file__, "..", ".."))
 SH_DIR = os.path.join(ROOT, "SH")
 OUTPUT_DIR = os.path.join(ROOT, "dataset", "forecasting")
-START_DATE = "2018-10-01"
+START_DATE = "2018-10-13"
 
 
 def convert_to_tfb_series(data: pd.DataFrame) -> pd.DataFrame:

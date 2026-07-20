@@ -12,7 +12,7 @@ for i in "${!TFB_SERIAL_RUN_FLAGS[@]}"; do
 done
 
 CFG="fixed_forecast_config_sh_event_hourly.json"
-COMMON_HP='{"seq_len": 576, "hour_patch_size": 6, "patch_size": 8, "t_patch_size": 16, "model_size": "medium", "mask_strategy": "combined", "t_mask_ratio": 0.15, "s_mask_ratio": 0.15, "contrastive_weight": 0.5, "meta_weight": 1.0, "lr": 0.0003, "min_lr": 0.0001, "num_epochs": 500, "num_workers": 2, "patience": 5, "curriculum_mask": 1, "curriculum_mask_ratio": 0.01, "curriculum_mask_rate": 3, "cycle_gamma": 1.0, "psych_top_k": 2, "batch_size": 128, "norm": true}'
+COMMON_HP='{"seq_len": 576, "hour_patch_size": 6, "patch_size": 4, "t_patch_size": 16, "model_size": "medium", "mask_strategy": "combined", "t_mask_ratio": 0.15, "s_mask_ratio": 0.15, "contrastive_weight": 0.5, "meta_weight": 0.5, "lr": 0.0003, "min_lr": 0.0001, "num_epochs": 500, "num_workers": 2, "patience": 5, "curriculum_mask": 1, "curriculum_mask_ratio": 0.01, "curriculum_mask_rate": 3, "cycle_gamma": 1.0, "psych_top_k": 2, "batch_size": 128, "norm": true}'
 
 run_benchmark_one_series_at_a_time "$CFG" '{"horizon": 288}' "ucdgpt.UCDGPT" \
   "${COMMON_HP%\}} , \"pred_len\": 288, \"horizon\": 288}" "SH_Event/UCDGPT/hourly/d12"

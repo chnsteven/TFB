@@ -1,9 +1,10 @@
 dataset/
-result/
+results/
+scripts/
 .idea/
 .vscode/
 .git
 *.DS_Store
 venv/
 **/__pycache__/
-TFB results/
+UCDGPT/

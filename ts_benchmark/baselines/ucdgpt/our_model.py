@@ -12,8 +12,9 @@ from .Embed import (
     get_1d_sincos_pos_embed_from_grid,
 )
 from .mask_strategy import (
-    psych_gradient_masking,
-    random_spatiotemporal_masking,
+    apply_base_mask,
+    apply_meta_mask,
+    resolve_mask_ablation,
     spatiotemporal_restore,
 )
 from .psych_factor import PsychFactor
@@ -518,17 +519,12 @@ class UcdGPT(nn.Module):
 
         return decoder_pos_embed
 
-    def _apply_mask_strategy(self, x, x_raw, T, mask_strategy, mode, seed=None):
-        branch_offset = {
-            "random_spatiotemporal": 1,
-            "psych_gradient": 2,
-            "psych_gradient_union": 2,
-            "spatio_gradient": 3,
-        }.get(mask_strategy, 0)
+    def _mask_eval_kwargs(self, mode, seed=None, branch_offset=0):
         effective_seed = (seed + branch_offset) if seed is not None else None
         use_deterministic = mode == "forward" or (
             getattr(self.args, "fixed_mask_per_epoch", 0) and effective_seed is not None
         )
+<<<<<<< HEAD
         if use_deterministic:
             eval_kw = {
                 "option": "eval",
@@ -558,29 +554,46 @@ class UcdGPT(nn.Module):
                 **eval_kw,
             )
         raise ValueError(f"Unsupported mask_strategy: {mask_strategy}")
+=======
+        if not use_deterministic:
+            return {}
+        return {
+            "option": "eval",
+            "seed": effective_seed if effective_seed is not None else 111,
+        }
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
 
     def forward_encoder(
         self,
         x,
         x_mark,
-        mask_strategy,
+        *,
+        temporal,
+        spatial,
         seed=None,
         data=None,
         mode="backward",
     ):
-        # embed patches
         N, _, T, H, W = x.shape
-        x_raw = x  # keep raw x for psych_gradient_masking
+        x_raw = x
 
         x, TimeEmb = self.Embedding(x, x_mark, is_time=True)
         _, L, C = x.shape
 
         T = T // self.args.t_patch_size
-
         assert mode in ["backward", "forward"]
 
-        x, mask, ids_restore, ids_keep, mask_info = self._apply_mask_strategy(
-            x, x_raw, T, mask_strategy, mode, seed=seed
+        x, mask, ids_restore, ids_keep, mask_info = apply_meta_mask(
+            x,
+            x_raw,
+            self.patch_size,
+            self.args.t_patch_size,
+            temporal=temporal,
+            spatial=spatial,
+            psych_factor=self.psych_factor,
+            cycle_gamma=getattr(self.args, "cycle_gamma", 0.2),
+            psych_top_k=getattr(self.args, "psych_top_k", 2),
+            **self._mask_eval_kwargs(mode, seed=seed, branch_offset=2),
         )
 
         input_size = (T, H // self.patch_size, W // self.patch_size)
@@ -603,23 +616,27 @@ class UcdGPT(nn.Module):
         x,
         x_mark,
         x_raw,
-        mask_strategy,
+        *,
+        random,
         seed=None,
         data=None,
         mode="backward",
     ):
-        # embed patches
         N, _, T, H, W = x.shape
 
         x, TimeEmb = self.Embedding_event_only(x, x_mark, is_time=True)
         _, L, C = x.shape
 
         T = T // self.args.t_patch_size
-
         assert mode in ["backward", "forward"]
 
-        x, mask, ids_restore, ids_keep, mask_info = self._apply_mask_strategy(
-            x, x_raw, T, mask_strategy, mode, seed=seed
+        x, mask, ids_restore, ids_keep, mask_info = apply_base_mask(
+            x,
+            T,
+            random=random,
+            spatial_ratio=self.args.s_mask_ratio,
+            temporal_ratio=self.args.t_mask_ratio,
+            **self._mask_eval_kwargs(mode, seed=seed, branch_offset=1),
         )
 
         input_size = (T, H // self.patch_size, W // self.patch_size)
@@ -638,7 +655,7 @@ class UcdGPT(nn.Module):
         return x_attn, mask, ids_restore, input_size, TimeEmb, mask_info
 
     def forward_decoder(
-        self, x, ids_restore, mask_strategy, TimeEmb, input_size=None, data=None
+        self, x, ids_restore, TimeEmb, input_size=None, data=None
     ):
         N = x.shape[0]
         T, H, W = input_size
@@ -663,7 +680,7 @@ class UcdGPT(nn.Module):
         return x_attn
 
     def forward_decoder_event_only(
-        self, x, ids_restore, mask_strategy, TimeEmb, input_size=None, data=None
+        self, x, ids_restore, TimeEmb, input_size=None, data=None
     ):
         N = x.shape[0]
         T, H, W = input_size
@@ -781,7 +798,7 @@ class UcdGPT(nn.Module):
     def forward(
         self,
         imgs,
-        mask_strategy="random",
+        mask_strategy="combined",
         seed=None,
         data="none",
         mode="backward",
@@ -789,40 +806,17 @@ class UcdGPT(nn.Module):
         imgs, imgs_mark, _ = imgs  # (bsz, 4, T, H, W), (bsz, T, 2)
         imgs_event_only = imgs[:, : self.in_chans_event_only]  # (bsz, 1, T, H, W)
 
-        T, H, W = imgs.shape[2:]
+        ablation = resolve_mask_ablation(mask_strategy)
 
-        if mask_strategy == "combined":
-            mask_strategy_base = "random_spatiotemporal"
-            mask_strategy_meta = "psych_gradient_union"
-        elif mask_strategy == "gradient_dual":
-            mask_strategy_base = "psych_gradient"
-            mask_strategy_meta = "spatio_gradient"
-        elif mask_strategy in (
-            "random_spatiotemporal",
-            "psych_gradient",
-            "spatio_gradient",
-        ):
-            mask_strategy_base = mask_strategy
-            mask_strategy_meta = mask_strategy
-        else:
-            raise ValueError(
-                f"Unsupported mask_strategy: {mask_strategy}. "
-                "Use 'combined', 'gradient_dual', 'random_spatiotemporal', "
-                "'psych_gradient', or 'spatio_gradient'."
-            )
-
-        # Forward encoder for meta branch (fusion branch)
         latent, mask, ids_restore, input_size, TimeEmb, mask_info_meta = self.forward_encoder(
             imgs,
             imgs_mark,
-            mask_strategy_meta,
+            temporal=ablation["temporal"],
+            spatial=ablation["spatial"],
             seed=seed,
             data=data,
             mode=mode,
         )
-        # print(latent.shape, mask.shape)                     # torch.Size([bsz, 120, 128]) torch.Size([bsz, 240])
-
-        # Forward encoder for base branch (event_only branch)
         (
             latent_event_only,
             mask_event_only,
@@ -834,29 +828,25 @@ class UcdGPT(nn.Module):
             imgs_event_only,
             imgs_mark,
             imgs,
-            mask_strategy_base,  # Use base strategy for event_only branch
+            random=ablation["random"],
             seed=seed,
             data=data,
             mode=mode,
         )
-        # print(latent_event_only.shape, mask_event_only.shape)   # torch.Size([bsz, 120, 128]) torch.Size([bsz, 240])
         embed_pred = self.forward_decoder(
             latent,
             ids_restore,
-            mask_strategy_meta,  # Use meta strategy for fusion branch decoder
             TimeEmb,
             input_size=input_size,
             data=data,
-        )  # [N, L, p*p*1]
+        )
         embed_pred_event_only = self.forward_decoder_event_only(
             latent_event_only,
             ids_restore_event_only,
-            mask_strategy_base,  # Use base strategy for event_only branch decoder
             TimeEmb,
             input_size=input_size,
             data=data,
-        )  # [N, L, p*p*1]
-        # print(embed_pred.shape, embed_pred_event_only.shape)
+        )
 
         # predictor projection
         pred = self.decoder_pred(
@@ -871,12 +861,7 @@ class UcdGPT(nn.Module):
         # print(pred_event_only.shape, mask_event_only.shape)     # torch.Size([117, 1024, 2]) torch.Size([117, 1024])
         # print(embed_pred_event_only.shape)                    # torch.Size([117, 1024, 128])
 
-        if mask_strategy in ("combined", "gradient_dual"):
-            loss_mode = "total"
-        elif mask_strategy == "random_spatiotemporal":
-            loss_mode = "base"
-        else:
-            loss_mode = "meta"
+        loss_mode = ablation["loss_mode"]
 
         loss1, loss2, target = self.forward_loss_patch_level(
             imgs,
@@ -888,12 +873,10 @@ class UcdGPT(nn.Module):
             embed_pred_event_only,
             loss_mode=loss_mode,
         )
-        if mask_strategy in ("combined", "gradient_dual"):
-            loss2["mask_info"] = {
-                "meta": mask_info_meta,
-                "base": mask_info_base,
-            }
-        else:
-            loss2["mask_info"] = {mask_strategy: mask_info_meta}
+        loss2["mask_info"] = {
+            "mask_strategy": mask_strategy,
+            "meta": mask_info_meta,
+            "base": mask_info_base,
+        }
 
         return loss1, loss2, pred, pred_event_only, target, mask_event_only

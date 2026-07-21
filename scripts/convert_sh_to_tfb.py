@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(__file__, "..", ".."))
+<<<<<<< HEAD
 import sys
 
 sys.path.insert(0, ROOT)
@@ -15,6 +16,11 @@ from ts_benchmark.common.constant import FORECASTING_DATASET_PATH, SH_DATA_PATH
 SH_DIR = SH_DATA_PATH
 OUTPUT_DIR = FORECASTING_DATASET_PATH
 START_DATE = "2018-10-01"
+=======
+SH_DIR = os.path.join(ROOT, "SH")
+OUTPUT_DIR = os.path.join(ROOT, "dataset", "forecasting")
+START_DATE = "2018-10-13"
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
 
 
 def convert_to_tfb_series(data: pd.DataFrame) -> pd.DataFrame:

@@ -2,8 +2,50 @@ import torch
 from . import utils
 from .psych_factor import PsychFactor
 
-# Module-level singleton; avoid re-init + .to(device) each forward
+MASK_STRATEGIES = (
+    "combined",
+    "no_spatial_mask",
+    "no_temporal_mask",
+    "no_random_mask",
+)
+
 _psych_factor_cache: dict = {}
+
+
+def resolve_mask_ablation(mask_strategy: str) -> dict:
+    """Map public ``mask_strategy`` to active mask components."""
+    if mask_strategy == "combined":
+        return {
+            "random": True,
+            "temporal": True,
+            "spatial": True,
+            "loss_mode": "total",
+        }
+    if mask_strategy == "no_spatial_mask":
+        return {
+            "random": True,
+            "temporal": True,
+            "spatial": False,
+            "loss_mode": "total",
+        }
+    if mask_strategy == "no_temporal_mask":
+        return {
+            "random": True,
+            "temporal": False,
+            "spatial": True,
+            "loss_mode": "total",
+        }
+    if mask_strategy == "no_random_mask":
+        return {
+            "random": False,
+            "temporal": True,
+            "spatial": True,
+            "loss_mode": "meta",
+        }
+    raise ValueError(
+        f"Unsupported mask_strategy: {mask_strategy!r}. "
+        f"Use one of: {', '.join(MASK_STRATEGIES)}."
+    )
 
 
 def _get_psych_factor(device, cycle_gamma=0.2, psych_top_k=2):
@@ -15,22 +57,23 @@ def _get_psych_factor(device, cycle_gamma=0.2, psych_top_k=2):
     return _psych_factor_cache[cache_key]
 
 
-def random_spatiotemporal_masking(x, T, spatial_ratio=0.15, temporal_ratio=0.15, option="", seed=None):
-    """
-    Randomly mask tokens with joint spatial and temporal constraints.
-    A token is masked if its time step is masked OR its spatial position is masked.
+def _no_mask(x, T, option="", seed=None):
+    del option, seed, T
+    N, L, D = x.shape
+    device = x.device
+    mask = torch.zeros(N, L, device=device)
+    ids_restore = torch.arange(L, device=device).unsqueeze(0).expand(N, -1)
+    return x, mask, ids_restore, ids_restore, {
+        "random": False,
+        "temporal": False,
+        "spatial": False,
+        "t_mask_rate": 0.0,
+        "s_mask_rate": 0.0,
+        "union_rate": 0.0,
+    }
 
-    Args:
-        x: [N, L, D] token tensor after patch embedding.
-        T: number of temporal tokens (L must be divisible by T).
-        spatial_ratio: fraction of spatial positions to mask (default 0.15).
-        temporal_ratio: fraction of time steps to mask (default 0.15).
-        option: when set to "eval" uses a fixed random seed for determinism.
 
-    Returns:
-        x_masked, mask, ids_restore, ids_keep
-    """
-
+def _random_mask(x, T, spatial_ratio=0.15, temporal_ratio=0.15, option="", seed=None):
     def _mask():
         N, L, D = x.shape
         device = x.device
@@ -52,9 +95,10 @@ def random_spatiotemporal_masking(x, T, spatial_ratio=0.15, temporal_ratio=0.15,
         spatial_mask.scatter_(1, s_ids[:, :num_s_mask], True)
 
         mask = (temporal_mask.unsqueeze(2) | spatial_mask.unsqueeze(1)).reshape(N, L).float()
-
         mask_info = {
-            "strategy": "random_spatiotemporal",
+            "random": True,
+            "temporal": False,
+            "spatial": False,
             "t_mask_rate": temporal_mask.float().mean().item(),
             "s_mask_rate": spatial_mask.float().mean().item(),
             "union_rate": mask.float().mean().item(),
@@ -75,20 +119,23 @@ def random_spatiotemporal_masking(x, T, spatial_ratio=0.15, temporal_ratio=0.15,
 
 
 def _mask_prob_capped(values: torch.Tensor, cap: float) -> torch.Tensor:
-    """Truncate mask probabilities to ``[0, cap]`` (``cycle_gamma`` upper bound)."""
     cap_t = values.new_tensor(float(cap))
     return values.clamp(min=0.0, max=cap_t)
 
 
-def psych_gradient_masking(
+def _content_aware_mask(
     x_tokens,
     x_raw,
     patch_size,
     t_patch_size,
+    *,
+    temporal,
+    spatial,
     option="",
     seed=None,
     cycle_gamma=0.2,
     psych_top_k=2,
+<<<<<<< HEAD
     component="union",
     psych_factor=None,
 ):
@@ -99,12 +146,18 @@ def psych_gradient_masking(
                 component
             )
         )
+=======
+    psych_factor=None,
+):
+    if not temporal and not spatial:
+        return _no_mask(x_tokens, t_patch_size, option=option, seed=seed)
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
 
     def _mask():
         B, L, D = x_tokens.shape
         device = x_tokens.device
 
-        B_raw, C_raw, T_raw, H_raw, W_raw = x_raw.shape
+        B_raw, _, T_raw, H_raw, W_raw = x_raw.shape
         T_patch = T_raw // t_patch_size
         H_patch = H_raw // patch_size
         W_patch = W_raw // patch_size
@@ -117,7 +170,14 @@ def psych_gradient_masking(
             )
 
         M = x_raw[:, 1:4]
+        psych = psych_factor
+        if psych is None:
+            psych = _get_psych_factor(
+                device, cycle_gamma=cycle_gamma, psych_top_k=psych_top_k
+            )
+        psi, top_k_cycles = psych.compute_psych_factor(M)
 
+<<<<<<< HEAD
         psych = psych_factor
         if psych is None:
             psych = _get_psych_factor(device, cycle_gamma=cycle_gamma, psych_top_k=psych_top_k)
@@ -130,13 +190,27 @@ def psych_gradient_masking(
         p = _mask_prob_capped(psi_patch * cap, cap)
         t_prob = torch.where(tau_patch, p, torch.zeros_like(p))
         t_mask_full = torch.bernoulli(t_prob).bool()
+=======
+        cap = float(cycle_gamma)
+        t_mask_full = torch.zeros(B, T_patch, H_patch, W_patch, dtype=torch.bool, device=device)
+        s_mask_full = torch.zeros_like(t_mask_full)
+        union_prob = None
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
 
-        grad = utils.compute_central_spatio_gradient(M)
-        grad_mean = grad.mean(dim=1)
-        grad_patch = utils.downsample_to_patch_resolution(grad_mean, T_patch, H_patch, W_patch)
-        s_prob = _mask_prob_capped(grad_patch, cap)
-        s_mask_full = torch.bernoulli(s_prob).bool()
+        if temporal:
+            tau_cycle = utils.build_tau_cycle(psi, top_k_cycles)
+            psi_patch = utils.downsample_to_patch_resolution(
+                psi, T_patch, H_patch, W_patch
+            )
+            tau_patch = utils.map_tau_cycle_to_patch(
+                tau_cycle, t_patch_size, patch_size
+            )
+            p = _mask_prob_capped(psi_patch * cap, cap)
+            t_prob = torch.where(tau_patch, p, torch.zeros_like(p))
+            t_mask_full = torch.bernoulli(t_prob).bool()
+            union_prob = t_prob
 
+<<<<<<< HEAD
         if component == "psych":
             union_mask = t_mask_full
             union_prob = t_prob
@@ -149,7 +223,20 @@ def psych_gradient_masking(
             union_mask = t_mask_full | s_mask_full
             union_prob = s_mask_full.float() + (~s_mask_full).float() * t_prob
             strategy_name = "psych_gradient"
+=======
+        if spatial:
+            grad = utils.compute_central_spatio_gradient(M)
+            grad_mean = grad.mean(dim=1)
+            grad_patch = utils.downsample_to_patch_resolution(
+                grad_mean, T_patch, H_patch, W_patch
+            )
+            s_prob = _mask_prob_capped(grad_patch, cap)
+            s_mask_full = torch.bernoulli(s_prob).bool()
+            if union_prob is not None:
+                union_prob = s_mask_full.float() + (~s_mask_full).float() * union_prob
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
 
+        union_mask = t_mask_full | s_mask_full
         mask_flat = union_mask.reshape(B, L).float()
 
         if union_prob is None:
@@ -160,8 +247,9 @@ def psych_gradient_masking(
             x_for_gather = x_tokens * keep_st.unsqueeze(-1)
 
         mask_info = {
-            "strategy": strategy_name,
-            "component": component,
+            "random": False,
+            "temporal": temporal,
+            "spatial": spatial,
             "cycle_gamma": cap,
             "psych_top_k": int(psych_top_k),
             "t_mask_rate": t_mask_full.float().mean().item(),
@@ -173,10 +261,15 @@ def psych_gradient_masking(
         ids_restore = torch.argsort(ids_shuffle, dim=1)
         len_keep_per_sample = (mask_flat == 0).sum(dim=1)
         max_keep = max(int(len_keep_per_sample.max().item()), 1)
-
         ids_keep = ids_shuffle[:, :max_keep]
         x_masked = torch.gather(
+<<<<<<< HEAD
             x_for_gather, dim=1, index=ids_keep.unsqueeze(-1).expand(B, max_keep, D)
+=======
+            x_for_gather,
+            dim=1,
+            index=ids_keep.unsqueeze(-1).expand(B, max_keep, D),
+>>>>>>> 57ec51bdfe112ecd031ffb6a93836434e040743c
         )
         return x_masked, mask_flat, ids_restore, ids_keep, mask_info
 
@@ -187,8 +280,54 @@ def psych_gradient_masking(
     return _mask()
 
 
+def apply_base_mask(
+    x,
+    T,
+    *,
+    random,
+    spatial_ratio=0.15,
+    temporal_ratio=0.15,
+    option="",
+    seed=None,
+):
+    if random:
+        return _random_mask(
+            x, T, spatial_ratio, temporal_ratio, option=option, seed=seed
+        )
+    return _no_mask(x, T, option=option, seed=seed)
+
+
+def apply_meta_mask(
+    x_tokens,
+    x_raw,
+    patch_size,
+    t_patch_size,
+    *,
+    temporal,
+    spatial,
+    option="",
+    seed=None,
+    cycle_gamma=0.2,
+    psych_top_k=2,
+    psych_factor=None,
+):
+    return _content_aware_mask(
+        x_tokens,
+        x_raw,
+        patch_size,
+        t_patch_size,
+        temporal=temporal,
+        spatial=spatial,
+        option=option,
+        seed=seed,
+        cycle_gamma=cycle_gamma,
+        psych_top_k=psych_top_k,
+        psych_factor=psych_factor,
+    )
+
+
 def spatiotemporal_restore(x, ids_restore, N, T, H, W, C, mask_token):
-    """Restore masked tokens for random_spatiotemporal / psych_gradient."""
+    """Restore masked tokens after encoder masking."""
     L_restore = ids_restore.shape[1]
     L_keep = x.shape[1]
     num_mask = L_restore - L_keep

@@ -38,7 +38,7 @@ MODEL_HYPER_PARAMS = {
     "lr_anneal_steps": 200,
     "num_epochs": 500,
     "num_workers": 0,
-    "loss": "MSE",
+    "loss": "MAE",
     "patience": 5,
     "lradj": "TST",
 }
@@ -100,7 +100,7 @@ class UCDGPT(DeepForecastingModelBase):
         self.config.ucdgpt_his_len = self.config.seq_len // hour_patch_size
 
     def _init_criterion_and_optimizer(self):
-        criterion = torch.nn.MSELoss()
+        criterion = torch.nn.L1Loss()
         optimizer = optim.AdamW(
             self.model.parameters(),
             lr=self.config.lr,

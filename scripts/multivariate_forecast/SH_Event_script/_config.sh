@@ -12,6 +12,8 @@ done
 
 TFB_NUM_WORKERS="${TFB_NUM_WORKERS:-$SH_EVENT_COUNT}"
 TFB_NUM_CPUS="${TFB_NUM_CPUS:-$TFB_NUM_WORKERS}"
+TFB_GPU_DEVICES="${TFB_GPU_DEVICES:-0}"
+read -r -a TFB_GPU_ARGS <<< "$TFB_GPU_DEVICES"
 
 # Settings for scripts that intentionally run one series per process.
 TFB_SERIAL_RUN_FLAGS=(
@@ -20,6 +22,9 @@ TFB_SERIAL_RUN_FLAGS=(
   --num-cpus 1
   --timeout 60000
 )
+if ((${#TFB_GPU_ARGS[@]} > 0)); then
+  TFB_SERIAL_RUN_FLAGS+=(--gpus "${TFB_GPU_ARGS[@]}")
+fi
 
 # Settings for scripts that pass multiple series to one run_benchmark.py process.
 TFB_PARALLEL_RUN_FLAGS=(

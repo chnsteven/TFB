@@ -6,7 +6,12 @@ import os
 import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(__file__, "..", ".."))
-FORECAST_DIR = os.path.join(ROOT, "dataset", "forecasting")
+import sys
+
+sys.path.insert(0, ROOT)
+from ts_benchmark.common.constant import FORECASTING_DATASET_PATH
+
+FORECAST_DIR = FORECASTING_DATASET_PATH
 
 
 def main() -> None:

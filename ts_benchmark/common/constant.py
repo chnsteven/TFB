@@ -8,8 +8,18 @@ ROOT_PATH = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
 AUTODL_TMP_ROOT = os.environ.get("AUTODL_TMP_ROOT", "/root/autodl-tmp")
 RESULT_PATH = os.environ.get("TFB_RESULT_PATH", os.path.join(AUTODL_TMP_ROOT, "TFB"))
 
-# Build the path to the dataset folder
-FORECASTING_DATASET_PATH = os.path.join(ROOT_PATH, "dataset", "forecasting")
+# Forecasting datasets are stored under autodl-tmp; TFB/dataset/forecasting is a symlink.
+FORECASTING_DATASET_PATH = os.environ.get(
+    "TFB_FORECASTING_DATASET_PATH",
+    os.path.join(AUTODL_TMP_ROOT, "TFB", "dataset", "forecasting"),
+)
+FORECASTING_DATASET_LINK_PATH = os.path.join(ROOT_PATH, "dataset", "forecasting")
+
+# Raw SH event tensors (.npy) for conversion scripts.
+SH_DATA_PATH = os.environ.get(
+    "TFB_SH_DATA_PATH",
+    os.path.join(AUTODL_TMP_ROOT, "Baselines", "SH"),
+)
 
 # Profile Path
 CONFIG_PATH = os.path.join(ROOT_PATH, "config")

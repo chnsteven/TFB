@@ -7,8 +7,13 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(__file__, "..", ".."))
-SH_DIR = os.path.join(ROOT, "SH")
-OUTPUT_DIR = os.path.join(ROOT, "dataset", "forecasting")
+import sys
+
+sys.path.insert(0, ROOT)
+from ts_benchmark.common.constant import FORECASTING_DATASET_PATH, SH_DATA_PATH
+
+SH_DIR = SH_DATA_PATH
+OUTPUT_DIR = FORECASTING_DATASET_PATH
 START_DATE = "2018-10-01"
 
 

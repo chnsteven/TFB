@@ -2,10 +2,6 @@
 set -euo pipefail
 source "$(dirname "$0")/../_config.sh"
 
-TFB_GPU_DEVICES="${TFB_GPU_DEVICES:-0}"
-read -r -a DUET_GPU_ARGS <<< "$TFB_GPU_DEVICES"
-TFB_SERIAL_RUN_FLAGS+=(--gpus "${DUET_GPU_ARGS[@]}")
-
 CFG="fixed_forecast_config_sh_event_hourly.json"
 COMMON_HP='{"seq_len": 576, "norm": true, "batch_size": 32, "d_ff": 256, "d_model": 256, "dropout": 0.6, "e_layers": 1, "factor": 2, "fc_dropout": 0.6, "k": 1, "loss": "MAE", "lr": 0.0005, "lradj": "type1", "n_heads": 1, "num_epochs": 50, "num_experts": 1, "patch_len": 48, "patience": 3, "CI": true}'
 
